@@ -305,9 +305,38 @@ The pipeline genuinely gates on the test: `healthcheck.sh` exits non-zero
 on any status other than 200, which fails the `test` job and prevents
 `publish` from running.
 
-> **Pending.** This has not run yet — the repository has no remote at the
-> time of writing. Push to GitHub, confirm all four jobs are green, then
-> add the run screenshot below.
+Observed on the merge of pull request #1 into `main`
+(run `39448164297`):
+
+```
+lint       success
+build      success
+test       success
+publish    success
+```
+
+The published image was pulled back from GHCR and verified end to end:
+
+```
+$ docker pull ghcr.io/gokulprasath5231848-hub/devops-intern-final:latest
+Status: Downloaded newer image for ghcr.io/.../devops-intern-final:latest
+
+$ docker images ... --format '{{.Size}}'
+19.5MB
+
+$ docker exec nginx-app id -un
+nginx
+
+$ curl -s -D - -o /dev/null http://localhost:8080/ | grep -i x-build-sha
+X-Build-Sha: 6af52ff5ff7d214643228ed97f1cb90d37e57e4b
+
+$ git rev-parse origin/main
+6af52ff5ff7d214643228ed97f1cb90d37e57e4b
+```
+
+The build identifier baked into the published image matches the commit on
+`main` exactly, which confirms the artifact tested by CI is the artifact
+released.
 
 ![CI pipeline green](docs/screenshots/ci-pipeline.png)
 
@@ -395,18 +424,36 @@ cardinality low.
 Isolating non-200 NGINX access logs:
 
 ```logql
-{container="nginx-app"}
+{container="nginx-app"} |= `HTTP/`
   | pattern `<ip> - <user> [<ts>] "<method> <path> <proto>" <status> <size> "<referer>" "<ua>" "<xff>"`
+  | status != ""
   | status != "200"
 ```
 
 Full procedure, label table, all queries and the Grafana data source setup
 are in [`monitoring/loki_setup.md`](monitoring/loki_setup.md).
 
-> **Pending.** `docker compose config` validates, but the stack has not
-> been run — Docker Desktop became unstable on this machine (see
-> Troubleshooting 5). Bring the stack up, run the queries, record the
-> results in `loki_setup.md` section 6, and add the screenshot below.
+Observed: Loki reported `ready`, Promtail discovered seven containers
+including `nginx-app`, and after three deliberate 404 requests the query
+returned exactly those three lines and nothing else.
+
+```
+$ curl --silent http://localhost:3100/loki/api/v1/label/container/values
+{"status":"success","data":["grafana","kintix_backend","kintix_postgres",
+ "kintix_web","loki","nginx-app","promtail"]}
+```
+
+```
+172.17.0.1 - - [20/Oct/2026:15:28:30 +0000] "GET /admin HTTP/1.1" 404 146 "-" "curl/8.19.0" "-"
+172.17.0.1 - - [20/Oct/2026:15:28:30 +0000] "GET /missing.html HTTP/1.1" 404 146 "-" "curl/8.19.0" "-"
+172.17.0.1 - - [20/Oct/2026:15:28:30 +0000] "GET /this-path-does-not-exist HTTP/1.1" 404 146 "-" "curl/8.19.0" "-"
+total matches: 3
+```
+
+`service` and `nomad_alloc_id` do not appear while the container is
+started by `docker run` — those labels are read from the
+`com.hashicorp.nomad.*` Docker labels and only exist once Nomad schedules
+the workload.
 
 ![Grafana Explore showing NGINX logs](docs/screenshots/grafana-explore.png)
 
@@ -538,21 +585,50 @@ Promtail and Grafana images. Both WSL distributions (`docker-desktop` and
 within 60 seconds on two consecutive attempts. Disk was ruled out — 45 GB
 free on C:.
 
-**Resolution.** Unresolved on this machine. The documented next step is
-`wsl --shutdown` followed by a Docker Desktop restart, or a host reboot.
-This is why Task 6 has no captured results.
+**Resolution.** `wsl --shutdown` to tear the WSL backend down cleanly,
+then restart Docker Desktop. The stack pulled and started normally
+afterwards and has been stable since.
+
+### 6. LogQL non-200 filter matched unparsed log lines
+
+**Symptom.** The query meant to isolate failed NGINX requests returned
+eleven lines instead of three, including NGINX's own startup output:
+
+```
+/docker-entrypoint.sh: Configuration complete; ready for start up
+10-listen-on-ipv6-by-default.sh: info: can not modify /etc/nginx/conf.d/default.conf
+```
+
+**Cause.** The container writes both the access log and the entrypoint's
+startup messages to stdout. `pattern` cannot parse a startup line, so no
+`status` field is extracted — and in LogQL a label that does not exist is
+**not** equal to `"200"`, so `| status != "200"` passed every unparseable
+line through. The filter was effectively selecting parse failures.
+
+**Resolution.** Added a line filter to restrict the stream to access log
+entries before parsing, plus an emptiness guard for anything that still
+fails to parse:
+
+```logql
+{container="nginx-app"} |= `HTTP/`
+  | pattern `...`
+  | status != ""
+  | status != "200"
+```
+
+Returns exactly the three deliberate 404s.
 
 ## Known limitations
 
 Things that are not production-ready, and what I would change with more
 time.
 
-1. **Tasks 4, 5 and 6 are not verified end to end.** CI has never run (no
-   remote yet), the Nomad job is parsed but never scheduled (no agent
-   installed), and the Loki stack never started (Docker Desktop crash).
-   Everything else in this README is observed output. These three are
-   marked **Pending** in place rather than filled with plausible-looking
-   text, and they are the first thing to finish.
+1. **Task 5 is not verified end to end.** Nomad and Consul are not
+   installed on this machine, so the job file is parsed and its rendered
+   stanzas confirmed, but it has never been scheduled against a real
+   agent. That block is marked **Pending** in place rather than filled
+   with plausible-looking text, and it is the one remaining gap. Tasks 1,
+   2, 3, 4 and 6 are all observed output.
 
 2. **Scripts are bash, not strictly POSIX `sh`.** The brief asks for
    POSIX-compliant scripts *and* `set -euo pipefail`. `pipefail` is not in
@@ -588,9 +664,12 @@ time.
 - [x] Public repository named `devops-intern-final`
 - [x] Incremental commit history with conventional messages
 - [x] `.gitignore` excludes `.idea/` and IDE metadata
-- [ ] Feature branch merged to `main` via a self-reviewed pull request
-- [ ] Tagged `v1.0.0`
-- [ ] CI badge green on `main`
+- [x] Feature branch merged to `main` via a self-reviewed pull request
+- [x] Tagged `v1.0.0` on the merged `main`
+- [x] CI green on `main` — all four jobs, image published to GHCR
+- [x] Published image pulled back and verified (`X-Build-Sha` matches `main`)
+- [x] Loki ingesting labelled logs, non-200 LogQL query returning results
+- [ ] Nomad job deployed against a real agent, allocation healthy
 - [ ] Quick Start verified on a clean clone
 - [ ] Screenshots added to `docs/screenshots/`
 - [ ] HR tracking form submitted, DevOps Department selected
