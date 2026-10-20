@@ -61,8 +61,8 @@ test and release.
 |---|---|---|
 | Docker Engine | 29.7.2 | Building and running the image |
 | Docker Compose | v2 (bundled) | Monitoring stack |
-| Nomad | 1.8 | Orchestration |
-| Consul | 1.19 | Service registration and health checks |
+| Nomad | 2.0.7 | Orchestration (Linux build, run in WSL2) |
+| Consul | 2.0.4 | Service registration and health checks |
 | ShellCheck | 0.10.0 | Shell linting |
 | hadolint | 2.12.0 | Dockerfile linting |
 | Git | 2.54 | Source control |
@@ -342,6 +342,9 @@ released.
 
 ## Task 5 — Orchestration with Nomad
 
+Nomad and Consul must be the **Linux** builds. On Windows the Docker
+driver refuses Linux containers — see Troubleshooting 7.
+
 ```sh
 nomad job validate nomad/nginx-app.nomad.hcl
 nomad job plan nomad/nginx-app.nomad.hcl
@@ -402,12 +405,81 @@ $ ... job run -output -var='image_tag=abc123' /job/nginx-app.nomad.hcl | grep '"
 "image": "ghcr.io/gokulprasath5231848-hub/devops-intern-final:abc123",
 ```
 
-> **Pending.** Nomad and Consul are not installed on this machine, so the
-> job has been parsed but not deployed. Run the four commands above against
-> a real agent, paste `nomad job status nginx-app` showing the allocation
-> healthy, and add the screenshot below.
+Deployed against a Nomad 2.0.7 and Consul 2.0.4 dev cluster running inside
+WSL2 (see Troubleshooting 7 for why it cannot run on Windows natively).
 
-![Nomad allocation healthy](docs/screenshots/nomad-status.png)
+```
+$ nomad job validate nomad/nginx-app.nomad.hcl
+Job validation successful
+
+$ nomad job plan -var="image_tag=$(git rev-parse HEAD)" nomad/nginx-app.nomad.hcl
++ Job: "nginx-app"
++ Task Group: "web" (1 create)
+  + Task: "nginx" (forces create)
+Scheduler dry-run:
+- All tasks successfully allocated.
+
+$ nomad job run -var="image_tag=$(git rev-parse HEAD)" nomad/nginx-app.nomad.hcl
+==> Monitoring evaluation "97cee7e5"
+    Allocation "bee2215e" created: node "a2117f9f", group "web"
+==> Monitoring deployment "80a76bd1"
+    Status = successful
+    Description = Deployment completed successfully
+```
+
+Allocation healthy:
+
+```
+$ nomad job status nginx-app
+ID            = nginx-app
+Type          = service
+Status        = running
+
+Summary
+Task Group  Queued  Starting  Running  Failed  Complete  Lost
+web         0       0         1        0       0         0
+
+Latest Deployment
+ID          = 80a76bd1
+Status      = successful
+
+Deployed
+Task Group  Auto Revert  Desired  Placed  Healthy  Unhealthy
+web         true         1        1       1        0
+
+Allocations
+ID        Node ID   Task Group  Version  Desired  Status
+bee2215e  a2117f9f  web         0        run      running
+```
+
+Consul registered the service and the health check is passing:
+
+```
+$ curl -s http://127.0.0.1:8500/v1/health/service/nginx-app
+  service nginx-app  addr 127.0.0.1:21272
+    check Serf Health Status      status=passing
+    check healthz                 status=passing
+```
+
+The allocation serves traffic on its dynamically allocated port, and the
+build identifier matches the deployed commit:
+
+```
+$ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:21272/healthz
+200
+$ curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:21272/
+200
+$ curl -s -D - -o /dev/null http://127.0.0.1:21272/ | grep -i x-build-sha
+X-Build-Sha: 7d05ac0b8e7f9c17a35332f0adbd6f09cefc1646
+$ git rev-parse HEAD
+7d05ac0b8e7f9c17a35332f0adbd6f09cefc1646
+```
+
+`nomad job validate` emits one warning, that the group defines services
+without a `shutdown_delay`. It is not required here: a single replica with
+no upstream load balancer has no connection-draining window to protect.
+
+![Nomad allocation healthy](docs/screenshots/nomad-status.jpg)
 
 ## Task 6 — Log aggregation with Grafana Loki
 
@@ -618,17 +690,59 @@ fails to parse:
 
 Returns exactly the three deliberate 404s.
 
+### 7. Nomad on Windows could not schedule the Linux image
+
+**Symptom.** With Nomad installed natively on Windows, the job would never
+place. `nomad node status -self` showed:
+
+```
+docker  detected=True  healthy=False
+        "Docker is configured with Linux containers; switch to Windows Containers"
+```
+
+**Cause.** Nomad's Windows build only drives Windows containers. The
+assessment image is Linux (`nginx:1.27-alpine-slim`), so the two
+requirements are mutually exclusive on that host: switching Docker Desktop
+to Windows containers satisfies Nomad but breaks the image, and leaving it
+in Linux mode satisfies the image but fails the driver fingerprint.
+
+A second, separate failure made this slower to see. Registering the agent
+as a Windows service produced `System error 1067 - the process terminated
+unexpectedly`, with no log written at all. Running `nomad agent -dev` in
+the foreground revealed the cause on stderr:
+
+```
+[ERROR] failed to send event to windows eventlog, timed out
+```
+
+The HashiCorp binaries do not implement the Service Control Manager
+interface, so the service wrapper kills them.
+
+**Resolution.** Ran the cluster inside WSL2 instead, where Linux Nomad
+talks to Docker Desktop's Linux engine directly:
+
+1. Enabled Docker Desktop WSL integration for the Ubuntu distribution.
+2. Installed the Linux builds of Nomad 2.0.7 and Consul 2.0.4 into
+   `~/bin` (static binaries, no root needed).
+3. Started both as dev agents and re-ran the job.
+
+The Docker driver then fingerprinted as `healthy=True` and the allocation
+placed first time. Both UIs remain reachable from Windows on
+`localhost:4646` and `localhost:8500` through WSL2 port forwarding.
+
+Two drivers report `Driver must run as root` (`exec` and `java`) because
+the agent runs as an unprivileged user. Neither is used by this job.
+
 ## Known limitations
 
 Things that are not production-ready, and what I would change with more
 time.
 
-1. **Task 5 is not verified end to end.** Nomad and Consul are not
-   installed on this machine, so the job file is parsed and its rendered
-   stanzas confirmed, but it has never been scheduled against a real
-   agent. That block is marked **Pending** in place rather than filled
-   with plausible-looking text, and it is the one remaining gap. Tasks 1,
-   2, 3, 4 and 6 are all observed output.
+1. **The Nomad cluster is a single-node dev agent in WSL2.** `-dev` mode
+   runs server and client in one process with no persistence, no ACLs and
+   no TLS, and the whole cluster disappears when the process stops. It
+   proves the job specification is correct and schedules cleanly; it is
+   not a production topology.
 
 2. **Scripts are bash, not strictly POSIX `sh`.** The brief asks for
    POSIX-compliant scripts *and* `set -euo pipefail`. `pipefail` is not in
@@ -675,8 +789,8 @@ time.
 - [x] CI green on `main` — all four jobs, image published to GHCR
 - [x] Published image pulled back and verified (`X-Build-Sha` matches `main`)
 - [x] Loki ingesting labelled logs, non-200 LogQL query returning results
-- [ ] Nomad job deployed against a real agent, allocation healthy
+- [x] Nomad job deployed, allocation healthy, Consul check passing
 - [ ] Quick Start verified on a clean clone
 - [x] Screenshots: container, CI pipeline, Grafana Explore
-- [ ] Screenshot: Nomad allocation healthy
+- [x] Screenshot: Nomad allocation healthy
 - [ ] HR tracking form submitted, DevOps Department selected
