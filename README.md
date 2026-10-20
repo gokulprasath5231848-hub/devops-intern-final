@@ -130,11 +130,13 @@ request. Commits are incremental and follow conventional commit messages.
 git log --oneline --graph
 ```
 
+Abbreviated hashes below are from `feature/pipeline` before the merge.
+
 ```
 * 224821a feat(monitoring): add loki, promtail and grafana stack with setup notes
 * dda457b feat(nomad): add nginx service job with consul check and rolling update
 * eeaa3db ci: add lint, build, test and publish pipeline
-* 7b0c1f4 feat(scripts): add sysinfo and healthcheck shell scripts
+* ccd5cab feat(scripts): add sysinfo and healthcheck shell scripts
 * 8091f05 fix(app): use alpine-slim base and chown after config test
 * 01a6fe1 feat(app): add non-root dockerfile with build sha injection
 * 04703ec feat(app): add nginx config and static index page
