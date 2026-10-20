@@ -1,4 +1,4 @@
-FROM nginx:1.27-alpine
+FROM nginx:1.27-alpine-slim
 
 ARG BUILD_SHA=unknown
 
@@ -7,9 +7,8 @@ COPY index.html /usr/share/nginx/html/index.html
 
 RUN sed -i "s|__BUILD_SHA__|${BUILD_SHA}|g" /etc/nginx/nginx.conf \
     && sed -i "s|__BUILD_SHA__|${BUILD_SHA}|g" /usr/share/nginx/html/index.html \
-    && mkdir -p /tmp/nginx \
-    && chown -R nginx:nginx /tmp/nginx /var/cache/nginx /usr/share/nginx/html \
-    && nginx -t
+    && nginx -t \
+    && chown -R nginx:nginx /var/cache/nginx /usr/share/nginx/html
 
 USER nginx
 
