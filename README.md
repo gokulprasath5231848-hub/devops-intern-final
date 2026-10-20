@@ -790,7 +790,7 @@ time.
 - [x] Published image pulled back and verified (`X-Build-Sha` matches `main`)
 - [x] Loki ingesting labelled logs, non-200 LogQL query returning results
 - [x] Nomad job deployed, allocation healthy, Consul check passing
-- [ ] Quick Start verified on a clean clone
+- [x] Quick Start verified on a clean clone (LF endings intact, image 19.5 MB, 200 OK)
 - [x] Screenshots: container, CI pipeline, Grafana Explore
 - [x] Screenshot: Nomad allocation healthy
 - [ ] HR tracking form submitted, DevOps Department selected
