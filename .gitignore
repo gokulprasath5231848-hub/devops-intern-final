@@ -1,0 +1,12 @@
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+*.log
+*.tar
+.env
+*.pem
+*.key
+monitoring/loki-data/
+docs/screenshots/*.tmp
