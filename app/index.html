@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DevOps Intern Final Assessment</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f6f7f9;
+    --card: #ffffff;
+    --ink: #11181c;
+    --muted: #5c6b73;
+    --line: #e3e8ec;
+    --accent: #0b7285;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1416;
+      --card: #171e21;
+      --ink: #e8edef;
+      --muted: #9aa8ad;
+      --line: #2a3438;
+      --accent: #4dd0e1;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 24px;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 32px 36px;
+    max-width: 560px;
+    width: 100%;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .tag {
+    display: inline-block;
+    font-size: 12px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  h1 { font-size: 24px; margin: 0 0 24px; }
+  dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 10px 20px; }
+  dt { color: var(--muted); font-size: 14px; }
+  dd { margin: 0; font-weight: 500; overflow-wrap: anywhere; }
+  code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 5px;
+    padding: 2px 6px;
+  }
+  footer {
+    margin-top: 26px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+  }
+</style>
+</head>
+<body>
+  <main class="card">
+    <span class="tag">Greentree &middot; DevOps Internship</span>
+    <h1>Containerised NGINX Delivery Pipeline</h1>
+    <dl>
+      <dt>Name</dt>
+      <dd>Gokul Prasath</dd>
+      <dt>Assessment date</dt>
+      <dd>2026-10-20</dd>
+      <dt>Build identifier</dt>
+      <dd><code>__BUILD_SHA__</code></dd>
+    </dl>
+    <footer>
+      Served by NGINX as a non-root user on port 8080.
+      Health endpoint at <code>/healthz</code>.
+    </footer>
+  </main>
+</body>
+</html>
