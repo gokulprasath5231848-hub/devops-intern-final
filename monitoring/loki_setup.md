@@ -197,7 +197,7 @@ nothing else:
 total matches: 3
 ```
 
-![Grafana Explore showing the non-200 query](../docs/screenshots/grafana-explore.png)
+![Grafana Explore showing the non-200 query](../docs/screenshots/grafana-explore.jpg)
 
 ## 7. Configuration rationale
 

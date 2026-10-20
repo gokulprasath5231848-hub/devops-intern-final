@@ -277,7 +277,7 @@ docker run --rm -i hadolint/hadolint:v2.12.0-alpine hadolint - < app/Dockerfile
 
 No output, exit 0.
 
-![Container serving traffic](docs/screenshots/container-running.png)
+![Container serving traffic](docs/screenshots/container-running.jpg)
 
 ## Task 4 — Continuous integration
 
@@ -338,7 +338,7 @@ The build identifier baked into the published image matches the commit on
 `main` exactly, which confirms the artifact tested by CI is the artifact
 released.
 
-![CI pipeline green](docs/screenshots/ci-pipeline.png)
+![CI pipeline green](docs/screenshots/ci-pipeline.jpg)
 
 ## Task 5 — Orchestration with Nomad
 
@@ -455,7 +455,7 @@ started by `docker run` — those labels are read from the
 `com.hashicorp.nomad.*` Docker labels and only exist once Nomad schedules
 the workload.
 
-![Grafana Explore showing NGINX logs](docs/screenshots/grafana-explore.png)
+![Grafana Explore showing NGINX logs](docs/screenshots/grafana-explore.jpg)
 
 ## Troubleshooting
 
@@ -655,7 +655,13 @@ time.
 7. **No image vulnerability scanning.** A Trivy or Grype step in `lint`
    would be a cheap, obvious addition.
 
-8. **The build is not bit-for-bit reproducible.** The base tag is pinned to
+8. **CI emits platform deprecation warnings.** GitHub reports that the
+   bundled actions still target Node.js 20 and that `ubuntu-latest` will
+   migrate to Ubuntu 26. Both are notices from the platform rather than
+   defects here, and the jobs pass, but pinning the runner image to
+   `ubuntu-24.04` would make the build less likely to shift underneath us.
+
+9. **The build is not bit-for-bit reproducible.** The base tag is pinned to
    `1.27-alpine-slim`, which still floats across patch releases. Pinning by
    digest would fix it at the cost of manual update churn.
 
@@ -671,5 +677,6 @@ time.
 - [x] Loki ingesting labelled logs, non-200 LogQL query returning results
 - [ ] Nomad job deployed against a real agent, allocation healthy
 - [ ] Quick Start verified on a clean clone
-- [ ] Screenshots added to `docs/screenshots/`
+- [x] Screenshots: container, CI pipeline, Grafana Explore
+- [ ] Screenshot: Nomad allocation healthy
 - [ ] HR tracking form submitted, DevOps Department selected
